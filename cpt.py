@@ -40,6 +40,41 @@ def listen_once(*, timeout=None):
 
 	return json_data
 
+def listen_many(*, num_items=None, num_batches=None, timeout=None):
+    if num_items is not None:
+        res = []
+        for _ in range(num_items):
+            cur = listen_once(timeout=None)
+            res.append(cur)
+        return res
+
+    if num_batches is not None:
+        res = []
+
+        batches = {}
+        while len(batches) < num_batches or any(need for need, tot in batches.values()):
+            print(f"Waiting for {num_batches} batches:", batches)
+            cur = listen_once(timeout=None)
+            res.append(cur)
+
+            cur_batch = cur['batch']
+            batch_id = cur_batch['id']
+            batch_cnt = cur_batch['size']
+            if batch_id not in batches:
+                batches[batch_id] = [batch_cnt, batch_cnt]
+            assert batches[batch_id][0] > 0
+            batches[batch_id][0] -= 1
+
+        return res
+
+    res = [listen_once(timeout=None)]
+    while True:
+        cnd = listen_once(timeout=timeout)
+        if cnd is None:
+            break
+        res.append(cnd)
+    return res
+
 
 base_path = str(Path.home()) + '/codex/cptool/'
 contest_path = 'contests/'
@@ -164,7 +199,9 @@ def main():
 	args = docopt(__doc__)
 
 	if args['e'] or args['--echo']:
-		print(listen_once())
+		datas = listen_many(num_batches = 1)
+		for data in datas:
+			print(data)
 		return
 	
 	if args['t'] or args['--test']:
@@ -172,8 +209,9 @@ def main():
 		return
 
 	os.chdir(base_path)
-	json_data = listen_once()
-	make_problem(json_data)
+	datas = listen_many(num_batches = 1)
+	for json_data in datas:
+		make_problem(json_data)
 
 
 if __name__ == '__main__':
