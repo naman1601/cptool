@@ -191,7 +191,7 @@ def make_problem(json_data):
 		output_file.write(testcase['output'])
 		output_file.close()
 	
-	print('Problem successfully made in directory:\n' + base_path + target_path)
+	print('Problem successfully made in directory:\n' + 'cd ' + base_path + target_path)
 	os.system('subl ' + base_path + file_path)
 
 
