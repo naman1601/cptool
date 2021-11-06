@@ -76,29 +76,48 @@ def listen_many(*, num_items=None, num_batches=None, timeout=None):
     return res
 
 
-base_path = str(Path.home()) + '/codex/cptool/'
-contest_path = 'contests/'
-template_file_path = 'template.cpp'
+base_path = Path.home().joinpath('codex', 'cptool')
+contest_path = base_path.joinpath('contests')
+template_file_path = base_path.joinpath('template.cpp')
 
 
 def test():
-	cmd = 'g++ -Dnaman1601 -std=gnu++17 -Wall -Wextra -Wshadow -D_GLIBCXX_DEBUG -ggdb3 -fsanitize=address -fsanitize=undefined code.cpp -o code'
+	cwd = Path.cwd()
+	io_file_number = 0
+	extension = '.txt'
+
+	# while True:
+	# 	output_file_name = cwd.joinpath('out' + str(io_file_number) + extension)
+	# 	if(os.path.isfile(output_file_name)):
+	# 		os.remove(output_file_name)
+	# 		io_file_number += 1
+	# 	else:
+	# 		break
+
+	executable_file_name = cwd.joinpath('code')
+	if os.path.isfile(executable_file_name):
+		os.remove(executable_file_name)
+	cmd = 'g++ -Dnaman1601 -std=c++17 -Wall -Wextra -Wshadow -D_GLIBCXX_DEBUG -ggdb3 -fsanitize=address -fsanitize=undefined code.cpp -o code'
 	os.system(cmd)
+	if not os.path.isfile(executable_file_name):
+		print(Fore.RED + 'COMPILATION ERROR' + Style.RESET_ALL)
+		return
 
 	io_file_number = 0
 	
 	while True:
-		input_file_name = 'in' + str(io_file_number) + '.txt'
+		input_file_name = cwd.joinpath('in' + str(io_file_number) + extension)
+		output_file_name = cwd.joinpath('out' + str(io_file_number) + extension)
 		if os.path.isfile(input_file_name):
-			os.system('./code < ' + input_file_name + ' > out' + str(io_file_number) + '.txt')
+			os.system(str(executable_file_name) + ' < ' + str(input_file_name) + ' > ' + str(output_file_name))
 			io_file_number += 1
 		else:
 			break
 	
 	for idx in range(io_file_number):
-		input_file_name = 'in' + str(idx) + '.txt'
-		answer_file_name = 'ans' + str(idx) + '.txt'
-		output_file_name = 'out' + str(idx) + '.txt'
+		input_file_name = cwd.joinpath('in' + str(idx) + extension)
+		answer_file_name = cwd.joinpath('ans' + str(idx) + extension)
+		output_file_name = cwd.joinpath('out' + str(idx) + extension)
 
 		output_file_content = open(output_file_name).read().strip()
 		answer_file_content = open(answer_file_name).read().strip()
@@ -153,9 +172,9 @@ def make_problem(json_data):
 		problem_name = json_data['url'][json_data['url'].rindex('/'):].lower()
 
 	contest_id = get_contest_id(json_data['url'])
-	target_path = contest_path + oj_name + '/' + contest_id + '/' + problem_name
+	target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
 	file_name = 'code.cpp'
-	file_path = target_path + '/' + file_name
+	file_path = target_path.joinpath(file_name)
 
 	if(os.path.isdir(target_path)):
 		print('The problem already exists. Do you want to overwrite it? Your current code and custom testcases will be lost!\n Please enter y or n:')
@@ -176,23 +195,21 @@ def make_problem(json_data):
 	code_file.close()
 
 	io_file_number = 0
-	input_file_base_name = target_path + '/in'
-	answer_file_base_name = target_path + '/ans'
 	extension = '.txt'
 
 	for testcase in json_data['tests']:
-		input_file_name = input_file_base_name + str(io_file_number) + extension
-		answer_file_name = answer_file_base_name + str(io_file_number) + extension
+		input_file_name = target_path.joinpath('in' + str(io_file_number) + extension)
+		answer_file_name = target_path.joinpath('ans' + str(io_file_number) + extension)
 		io_file_number += 1
 		input_file = open(input_file_name, 'w')
 		input_file.write(testcase['input'])
 		input_file.close()
-		output_file = open(answer_file_name, 'w')
-		output_file.write(testcase['output'])
-		output_file.close()
+		answer_file = open(answer_file_name, 'w')
+		answer_file.write(testcase['output'])
+		answer_file.close()
 	
-	print('Problem successfully made in directory:\n' + 'cd ' + base_path + target_path)
-	os.system('subl ' + base_path + file_path)
+	print('Problem successfully made in directory:\n' + 'cd ' + str(target_path))
+	os.system('subl ' + str(file_path))
 
 
 def main():
