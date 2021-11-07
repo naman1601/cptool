@@ -135,7 +135,7 @@ def test():
 
 
 def get_contest_id(url):
-	find_list = ['codeforces.com/contest/', 'atcoder.com/contests/', 'codeforces.com/problemset/problem/', 'codechef.com/']
+	find_list = ['codeforces.com/contest/', 'atcoder.jp/contests/', 'codeforces.com/problemset/problem/', 'codechef.com/']
 	to_find = ''
 
 	for option in find_list:
