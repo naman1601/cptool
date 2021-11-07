@@ -169,7 +169,7 @@ def make_problem(json_data):
 		problem_name += str(json_data['name'][1])
 
 	if oj_name == 'codechef':
-		problem_name = json_data['url'][json_data['url'].rindex('/'):].lower()
+		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
 
 	contest_id = get_contest_id(json_data['url'])
 	target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
