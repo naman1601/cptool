@@ -6,11 +6,14 @@ Usage:
   cpt.py --test
   cpt.py e
   cpt.py --echo
+  cpt.py g
+  cpt.py --gen
 
 Options:
   -h --help    Show this screen.
   e --echo     Just echo received responses and exit.
   t --test     Test your code against the downloaded/custom testcases.
+  g --gen		Generate code file with preset template
 """
 
 from docopt import docopt
@@ -79,6 +82,24 @@ def listen_many(*, num_items=None, num_batches=None, timeout=None):
 base_path = Path.home().joinpath('codex', 'cptool')
 contest_path = base_path.joinpath('contests')
 template_file_path = base_path.joinpath('template.cpp')
+
+
+def gen():
+	cwd = Path.cwd()
+	code_file_name = cwd.joinpath('code.cpp')
+
+	if code_file_name.is_file():
+		print('code.cpp already exists. Do you want to overwrite it with preset template?\nPlease enter y/n:')
+		choice = input()
+		if choice != 'y':
+			return
+
+	template_file = open(template_file_path, 'r')
+	to_write = template_file.read()
+	template_file.close()
+	code_file = open(code_file_name , 'w')
+	code_file.write(to_write)
+	code_file.close()
 
 
 def test():
@@ -176,23 +197,26 @@ def make_problem(json_data):
 	file_name = 'code.cpp'
 	file_path = target_path.joinpath(file_name)
 
+	make_new_code_file = True
+
 	if(os.path.isdir(target_path)):
-		print('The problem already exists. Do you want to overwrite it? Your current code and custom testcases will be lost!\n Please enter y or n:')
+		print('The problem already exists. Do you want to overwrite it? Some testcases might be lost!\n Please enter y or n:')
 		choice = input()
 		if(choice != 'y'):
 			return
-		shutil.rmtree(target_path)
+		make_new_code_file = False
 	
-	os.makedirs(target_path)
-	template_file = open(template_file_path, 'r')
-	to_write = template_file.read()
-	template_file.close()
-	to_write = '// time limit: ' + str( json_data['timeLimit']) + 's\n' + to_write
-	to_write = '// memory limit: ' + str(json_data['memoryLimit']) + 'MB\n' + to_write
-	to_write = '// url: ' + json_data['url'] + '\n' + to_write
-	code_file = open(file_path , 'w')
-	code_file.write(to_write)
-	code_file.close()
+	if make_new_code_file:
+		os.makedirs(target_path)
+		template_file = open(template_file_path, 'r')
+		to_write = template_file.read()
+		template_file.close()
+		to_write = '// time limit: ' + str( json_data['timeLimit']) + 's\n' + to_write
+		to_write = '// memory limit: ' + str(json_data['memoryLimit']) + 'MB\n' + to_write
+		to_write = '// url: ' + json_data['url'] + '\n' + to_write
+		code_file = open(file_path , 'w')
+		code_file.write(to_write)
+		code_file.close()
 
 	io_file_number = 0
 	extension = '.txt'
@@ -223,6 +247,10 @@ def main():
 	
 	if args['t'] or args['--test']:
 		test()
+		return
+
+	if args['g'] or args['--gen']:
+		gen()
 		return
 
 	os.chdir(base_path)
