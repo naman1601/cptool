@@ -10,10 +10,10 @@ Usage:
   cpt.py --gen
 
 Options:
-  -h --help		Show this screen.
-  e --echo		Just echo received responses and exit.
-  t --test		Test your code against the downloaded/custom testcases.
-  g --gen		Generate code file with preset template
+  -h --help  Show this screen
+  e --echo  Just echo received responses and exit
+  t --test  Test your code against the downloaded/custom testcases
+  g --gen  Generate code file with preset template
 """
 
 from docopt import docopt
