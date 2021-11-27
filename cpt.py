@@ -200,10 +200,7 @@ def make_problem(json_data):
 	make_new_code_file = True
 
 	if(os.path.isdir(target_path)):
-		print('The problem already exists. Do you want to overwrite it? Some testcases might be lost!\n Please enter y or n:')
-		choice = input()
-		if(choice != 'y'):
-			return
+		print('The problem already exists! Re-parsing testcase files.')
 		make_new_code_file = False
 	
 	if make_new_code_file:
