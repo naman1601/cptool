@@ -199,12 +199,13 @@ def make_problem(json_data):
 
 	make_new_code_file = True
 
-	if(os.path.isdir(target_path)):
-		print('The problem already exists! Re-parsing testcase files.')
+	if(file_path.is_file()):
+		print('The code file already exists! Re-parsing testcases.')
 		make_new_code_file = False
 	
 	if make_new_code_file:
-		os.makedirs(target_path)
+		if not os.path.exists(target_path):
+			os.makedirs(target_path)
 		template_file = open(template_file_path, 'r')
 		to_write = template_file.read()
 		template_file.close()
