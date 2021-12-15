@@ -107,14 +107,6 @@ def test():
 	io_file_number = 0
 	extension = '.txt'
 
-	# while True:
-	# 	output_file_name = cwd.joinpath('out' + str(io_file_number) + extension)
-	# 	if(os.path.isfile(output_file_name)):
-	# 		os.remove(output_file_name)
-	# 		io_file_number += 1
-	# 	else:
-	# 		break
-
 	executable_file_name = cwd.joinpath('code')
 	if os.path.isfile(executable_file_name):
 		os.remove(executable_file_name)
@@ -183,6 +175,8 @@ def make_problem(json_data):
 		oj_name = 'atcoder'
 	elif json_data['group'].startswith('CodeChef'):
 		oj_name = 'codechef'
+	elif json_data['group'].startswith('CSES'):
+		oj_name = 'cses'
 
 	problem_name = json_data['name'][0].lower()
 
@@ -192,8 +186,16 @@ def make_problem(json_data):
 	if oj_name == 'codechef':
 		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
 
-	contest_id = get_contest_id(json_data['url'])
-	target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
+	if oj_name == 'cses':
+		problem_name = problem_name = json_data['url'][json_data['url'].rindex('/') + 1:]
+
+
+	if oj_name != 'cses':
+		contest_id = get_contest_id(json_data['url'])
+		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
+	else:
+		target_path = contest_path.joinpath(oj_name, problem_name)
+
 	file_name = 'code.cpp'
 	file_path = target_path.joinpath(file_name)
 
