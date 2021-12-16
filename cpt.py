@@ -177,6 +177,8 @@ def make_problem(json_data):
 		oj_name = 'codechef'
 	elif json_data['group'].startswith('CSES'):
 		oj_name = 'cses'
+	elif json_data['group'].startswith('USACO'):
+		oj_name = 'usaco'
 
 	problem_name = json_data['name'][0].lower()
 
@@ -187,14 +189,23 @@ def make_problem(json_data):
 		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
 
 	if oj_name == 'cses':
-		problem_name = problem_name = json_data['url'][json_data['url'].rindex('/') + 1:]
+		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:]
+
+	if oj_name == 'usaco':
+		problem_name = json_data['languages']['java']['taskClass']
 
 
-	if oj_name != 'cses':
-		contest_id = get_contest_id(json_data['url'])
+	if oj_name == 'cses':
+		target_path = contest_path.joinpath(oj_name, problem_name)
+	elif oj_name == 'usaco':
+		contest_id = json_data['group'][7:]
+		contest_id = contest_id.replace(' ', '')
+		contest_id = contest_id.replace(',', '')
 		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
 	else:
-		target_path = contest_path.joinpath(oj_name, problem_name)
+		contest_id = get_contest_id(json_data['url'])
+		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
+
 
 	file_name = 'code.cpp'
 	file_path = target_path.joinpath(file_name)
