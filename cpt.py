@@ -135,7 +135,14 @@ def test():
 		output_file_content = open(output_file_name).read().strip()
 		answer_file_content = open(answer_file_name).read().strip()
 
-		if(output_file_content == answer_file_content):
+		output_file_lines = open(output_file_name).readlines()
+		answer_file_lines = open(answer_file_name).readlines()
+		for line_index in range(len(output_file_lines)):
+			output_file_lines[line_index] = output_file_lines[line_index].strip()
+		for line_index in range(len(answer_file_lines)):
+			answer_file_lines[line_index] = answer_file_lines[line_index].strip()
+
+		if(output_file_lines == answer_file_lines):
 			print(Fore.GREEN + 'Passed testcase #' + str(idx))
 			print(Style.RESET_ALL)
 		else:
