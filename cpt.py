@@ -192,6 +192,9 @@ def make_problem(json_data):
 	if(json_data['name'][1].isdigit()):
 		problem_name += str(json_data['name'][1])
 
+	if(json_data['name'][0:2] == 'Ex'):
+		problem_name = 'ex'
+
 	if oj_name == 'codechef':
 		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
 
