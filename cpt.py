@@ -79,7 +79,8 @@ def listen_many(*, num_items=None, num_batches=None, timeout=None):
     return res
 
 
-base_path = Path.home().joinpath('codex', 'cptool')
+# base_path = Path.home().joinpath('codex', 'cptool')
+base_path = Path('/').joinpath('media', 'naman1601', 'Data', 'naman1601', 'codex', 'cptool')
 contest_path = base_path.joinpath('contests')
 template_file_path = base_path.joinpath('template.cpp')
 
@@ -199,7 +200,7 @@ def make_problem(json_data):
 		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
 
 	if oj_name == 'cses':
-		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:]
+		problem_name = json_data['url'][(json_data['url'].rfind('/', 0, json_data['url'].rfind('/'))) + 1:]
 
 	if oj_name == 'usaco':
 		problem_name = json_data['languages']['java']['taskClass']
@@ -215,7 +216,6 @@ def make_problem(json_data):
 	else:
 		contest_id = get_contest_id(json_data['url'])
 		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
-
 
 	file_name = 'code.cpp'
 	file_path = target_path.joinpath(file_name)
