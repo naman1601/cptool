@@ -1,3 +1,7 @@
-contests
-template.cpp
+__pycache__/
+contests/
+config.json
+templates/template.*
 demo.py
+test_*.py
+.vscode/
