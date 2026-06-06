@@ -1,8 +1,15 @@
+# Python bytecode
 __pycache__/
+
+# Tool caches & local state
+.pytest_cache/
+.claude/
+.vscode/
+
+# User data & machine-specific config
 contests/
 config.json
 templates/template.*
+
+# Scratch files
 demo.py
-test_*.py
-!tests/test_*.py
-.vscode/

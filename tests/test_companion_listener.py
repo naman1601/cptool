@@ -131,6 +131,22 @@ def test_collect_batch_wrong_batch_id_is_ignored_and_warning_is_printed(monkeypa
     assert "different batch" in capsys.readouterr().err
 
 
+def test_collect_batch_wrong_batch_id_does_not_reset_batch_timeout(monkeypatch, capsys):
+    first = make_problem_payload(name="A", batch={"id": "batch", "size": 3})
+    wrong = make_problem_payload(name="X", batch={"id": "other", "size": 3})
+    factory = ServerFactory()
+    receive = Mock(side_effect=[first, wrong, None])
+    monkeypatch.setattr(companion_listener, "_CompanionServer", factory)
+    monkeypatch.setattr(companion_listener, "_receive", receive)
+    monkeypatch.setattr(companion_listener.time, "monotonic", Mock(side_effect=[100.0, 101.0, 109.0]))
+
+    problems = companion_listener.collect_batch()
+
+    assert problems == [first]
+    assert [call.kwargs["timeout"] for call in receive.call_args_list] == [None, 9.0, 1.0]
+    assert "different batch" in capsys.readouterr().err
+
+
 def test_collect_batch_partial_timeout_returns_received_problems_and_warns(monkeypatch, capsys):
     first = make_problem_payload(batch={"id": "batch", "size": 2})
     factory = ServerFactory()

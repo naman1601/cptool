@@ -82,10 +82,18 @@ def test_codeforces_get_path_unsupported_url_raises_cpt_error(contests_dir):
         platform.get_path(make_problem_payload(url="https://example.com/problem/A"), contests_dir)
 
 
-def test_atcoder_get_problem_name_uses_leading_problem_code():
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("C1. Split", "c1"),
+        ("Ex. Extra Problem", "ex"),
+        ("Ex2. Hard Version", "ex2"),
+    ],
+)
+def test_atcoder_get_problem_name_uses_leading_problem_code(name, expected):
     platform = oj_handlers.AtCoder()
 
-    assert platform.get_problem_name(make_problem_payload(name="C1. Split")) == "c1"
+    assert platform.get_problem_name(make_problem_payload(name=name)) == expected
 
 
 def test_atcoder_get_path_extracts_contest_id(contests_dir):

@@ -77,6 +77,14 @@ def test_print_config_dotted_key_prints_json_value(monkeypatch, capsys, sample_c
     assert printed == (sample_config["languages"]["python"] if expected is None else expected)
 
 
+def test_print_config_dotted_key_prints_null_scalar_as_json(monkeypatch, capsys, sample_config):
+    monkeypatch.setattr(config, "load_config", Mock(return_value=sample_config))
+
+    config.print_config("languages.python.compile")
+
+    assert json.loads(capsys.readouterr().out) is None
+
+
 @pytest.mark.parametrize("key", ["missing", "language.name"])
 def test_print_config_missing_or_scalar_path_raises_cpt_error(monkeypatch, sample_config, key):
     monkeypatch.setattr(config, "load_config", Mock(return_value=sample_config))
