@@ -1,7 +1,11 @@
 #!/usr/bin/python3
-"""Naman's tool to download and set-up problems using Competitive Companion
+"""cptool — download and test competitive programming problems
 Usage:
   cpt.py
+  cpt.py init
+  cpt.py config
+  cpt.py config <key> [<value>]
+  cpt.py config add-language
   cpt.py t
   cpt.py --test
   cpt.py e
@@ -10,275 +14,210 @@ Usage:
   cpt.py --gen
 
 Options:
-  -h --help  Show this screen
-  e --echo  Just echo received responses and exit
-  t --test  Test your code against the downloaded/custom testcases
-  g --gen  Generate code file with preset template
+  -h --help    Show this screen
+  t, --test    Test your code against downloaded/custom testcases
+  e, --echo    Echo received Competitive Companion responses and exit
+  g, --gen     Generate code file from template in current directory
+
+Commands:
+  init                   Interactive first-run configuration wizard
+  config                 Show full config
+  config <key>           Show a specific config value
+  config <key> <value>   Set a config value
+  config add-language    Add a new language interactively
 """
 
-from docopt import docopt
-import sys
-import os
-import http.server
-import json
-from pathlib import Path
+import shlex
 import subprocess
-import re
-import shutil
+import sys
 from pathlib import Path
-import filecmp
+
+from docopt import docopt
 from colorama import Fore, Style
 
-def listen_once(*, timeout=None):
-	json_data = None
+from core import LanguageConfig, CptError
+from config import load_config, run_init, print_config, set_config, add_language
+from companion_listener import collect_batch
+from problem_maker import make_problem, gen
 
-	class CompetitiveCompanionHandler(http.server.BaseHTTPRequestHandler):
-		def do_POST(self):
-			nonlocal json_data
-			json_data = json.load(self.rfile)
 
-	with http.server.HTTPServer(('127.0.0.1', 1327), CompetitiveCompanionHandler) as server:
-		server.timeout = timeout
-		server.handle_request()
+def build_command(template: str, **subs: str) -> list[str]:
+    """Split a command template into argv tokens, then substitute placeholders.
 
-	return json_data
+    Splitting before substituting means a value containing spaces (e.g. an
+    executable path under '/home/me/my problems/') stays a single argv token
+    instead of being re-split by the shell tokenizer.
+    """
+    try:
+        tokens = shlex.split(template)
+    except ValueError as e:
+        raise CptError(f"Invalid command template {template!r} (check quoting): {e}")
+    if not tokens:
+        raise CptError("Command template is empty.")
+    try:
+        return [token.format(**subs) for token in tokens]
+    except (KeyError, IndexError, ValueError) as e:
+        raise CptError(
+            f"Invalid placeholder in command template {template!r}: {e}. "
+            f"Only {{source}} and {{executable}} are available."
+        )
 
-def listen_many(*, num_items=None, num_batches=None, timeout=None):
-    if num_items is not None:
-        res = []
-        for _ in range(num_items):
-            cur = listen_once(timeout=None)
-            res.append(cur)
-        return res
 
-    if num_batches is not None:
-        res = []
+def run_checked(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run that turns a missing/uninvokable command into a CptError."""
+    try:
+        return subprocess.run(cmd, **kwargs)
+    except FileNotFoundError:
+        raise CptError(f"Command not found: '{cmd[0]}'. Is it installed and on your PATH?")
+    except OSError as e:
+        raise CptError(f"Could not run '{cmd[0]}': {e}")
 
-        batches = {}
-        while len(batches) < num_batches or any(need for need, tot in batches.values()):
-            print(f"Waiting for {num_batches} batches:", batches)
-            cur = listen_once(timeout=None)
-            res.append(cur)
 
-            cur_batch = cur['batch']
-            batch_id = cur_batch['id']
-            batch_cnt = cur_batch['size']
-            if batch_id not in batches:
-                batches[batch_id] = [batch_cnt, batch_cnt]
-            assert batches[batch_id][0] > 0
-            batches[batch_id][0] -= 1
+def compile_solution(language: LanguageConfig, cwd: Path) -> bool:
+    """Compile the solution. Returns True on success, prints an error otherwise."""
+    executable_path = cwd / language.executable
+    if executable_path.is_file():
+        executable_path.unlink()
 
-        return res
+    cmd    = build_command(language.compile, source=language.source_file, executable=language.executable)
+    result = run_checked(cmd, cwd=cwd)
 
-    res = [listen_once(timeout=None)]
+    if result.returncode != 0 or not executable_path.is_file():
+        print(Fore.RED + 'COMPILATION ERROR' + Style.RESET_ALL)
+        return False
+    return True
+
+
+def resolve_run_command(language: LanguageConfig, cwd: Path) -> list[str]:
+    executable = str(cwd / language.executable) if language.compile else ''
+    return build_command(language.run, source=language.source_file, executable=executable)
+
+
+def run_testcase(run_cmd: list[str], input_file: Path, cwd: Path) -> subprocess.CompletedProcess:
+    """Run one testcase and return the completed process."""
+    with open(input_file) as fin:
+        return run_checked(
+            run_cmd, stdin=fin,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=cwd,
+        )
+
+
+def _normalize_lines(text: str) -> list[str]:
+    """Split into stripped lines, dropping trailing blank lines."""
+    lines = [line.strip() for line in text.splitlines()]
+    while lines and lines[-1] == '':
+        lines.pop()
+    return lines
+
+
+def report_result(idx: int, result: subprocess.CompletedProcess,
+                  input_file: Path, answer_file: Path) -> None:
+    if result.returncode != 0:
+        print(Fore.RED + f'Runtime error on testcase #{idx}' + Style.RESET_ALL)
+        stdout_output = result.stdout.decode(errors='replace').strip() if result.stdout else ''
+        stderr_output = result.stderr.decode(errors='replace').strip() if result.stderr else ''
+        if stdout_output:
+            print(Fore.CYAN + 'Stdout:' + Style.RESET_ALL)
+            print(stdout_output)
+        if stderr_output:
+            print(Fore.CYAN + 'Stderr:' + Style.RESET_ALL)
+            print(stderr_output)
+        return
+
+    if not answer_file.is_file():
+        print(Fore.YELLOW + f'No answer file for testcase #{idx}, skipping.' + Style.RESET_ALL)
+        return
+
+    program_output = result.stdout.decode(errors='replace')
+    # Compare line-by-line with each line stripped, and ignore trailing blank
+    # lines on both sides, so trailing whitespace / newlines / a stray blank
+    # line at the end don't cause a spurious WA.
+    output_lines = _normalize_lines(program_output)
+    answer_lines = _normalize_lines(answer_file.read_text())
+
+    if output_lines == answer_lines:
+        print(Fore.GREEN + f'Passed testcase #{idx}' + Style.RESET_ALL)
+    else:
+        print(Fore.RED + f'WA on testcase #{idx}' + Style.RESET_ALL)
+        print(Fore.CYAN + 'Input:\n'       + Style.RESET_ALL + input_file.read_text())
+        print(Fore.CYAN + 'Expected:\n'    + Style.RESET_ALL + answer_file.read_text().strip())
+        print(Fore.CYAN + 'Your output:\n' + Style.RESET_ALL + program_output.strip())
+
+
+def test(config: dict) -> None:
+    language = LanguageConfig.for_active(config)
+    cwd      = Path.cwd()
+
+    if language.compile and not compile_solution(language, cwd):
+        return
+
+    run_cmd = resolve_run_command(language, cwd)
+
+    idx = 0
     while True:
-        cnd = listen_once(timeout=timeout)
-        if cnd is None:
+        input_file = cwd / f'in{idx}.txt'
+        if not input_file.is_file():
             break
-        res.append(cnd)
-    return res
+        answer_file = cwd / f'ans{idx}.txt'
+        result      = run_testcase(run_cmd, input_file, cwd)
+        report_result(idx, result, input_file, answer_file)
+        idx += 1
+
+    if idx == 0:
+        print(Fore.YELLOW + 'No testcases found (expected in0.txt in this directory).' + Style.RESET_ALL)
 
 
-# base_path = Path.home().joinpath('codex', 'cptool')
-base_path = Path('/').joinpath('media', 'naman1601', 'Data', 'naman1601', 'codex', 'cptool')
-contest_path = base_path.joinpath('contests')
-template_file_path = base_path.joinpath('template.cpp')
+def main() -> None:
+    args = docopt(__doc__)
 
+    try:
+        if args['init']:
+            run_init()
+            return
 
-def gen():
-	cwd = Path.cwd()
-	code_file_name = cwd.joinpath('code.cpp')
+        if args['config']:
+            if args['<key>'] == 'add-language':
+                add_language()
+            elif args['<value>']:
+                set_config(args['<key>'], args['<value>'])
+            else:
+                print_config(args['<key>'])
+            return
 
-	if code_file_name.is_file():
-		print('code.cpp already exists. Do you want to overwrite it with preset template?\nPlease enter y/n:')
-		choice = input()
-		if choice != 'y':
-			return
+        if args['e'] or args['--echo']:
+            # Echo only inspects the wire payload and needs no config — run it
+            # before load_config() so it works before 'cpt.py init' is done.
+            for problem in collect_batch():
+                print(problem)
+            return
 
-	template_file = open(template_file_path, 'r')
-	to_write = template_file.read()
-	template_file.close()
-	code_file = open(code_file_name , 'w')
-	code_file.write(to_write)
-	code_file.close()
+        config = load_config()
 
+        if args['t'] or args['--test']:
+            test(config)
+            return
 
-def test():
-	cwd = Path.cwd()
-	io_file_number = 0
-	extension = '.txt'
+        if args['g'] or args['--gen']:
+            gen(config)
+            return
 
-	executable_file_name = cwd.joinpath('code')
-	if os.path.isfile(executable_file_name):
-		os.remove(executable_file_name)
-	cmd = 'g++ -Dnaman1601 -std=c++17 -Wall -Wextra -Wshadow -D_GLIBCXX_DEBUG -ggdb3 -fsanitize=address -fsanitize=undefined code.cpp -o code'
-	os.system(cmd)
-	if not os.path.isfile(executable_file_name):
-		print(Fore.RED + 'COMPILATION ERROR' + Style.RESET_ALL)
-		return
+        for problem in collect_batch():
+            make_problem(problem, config)
 
-	io_file_number = 0
-	
-	while True:
-		input_file_name = cwd.joinpath('in' + str(io_file_number) + extension)
-		output_file_name = cwd.joinpath('out' + str(io_file_number) + extension)
-		if os.path.isfile(input_file_name):
-			os.system(str(executable_file_name) + ' < ' + str(input_file_name) + ' > ' + str(output_file_name))
-			io_file_number += 1
-		else:
-			break
-	
-	for idx in range(io_file_number):
-		input_file_name = cwd.joinpath('in' + str(idx) + extension)
-		answer_file_name = cwd.joinpath('ans' + str(idx) + extension)
-		output_file_name = cwd.joinpath('out' + str(idx) + extension)
-
-		output_file_content = open(output_file_name).read().strip()
-		answer_file_content = open(answer_file_name).read().strip()
-
-		output_file_lines = open(output_file_name).readlines()
-		answer_file_lines = open(answer_file_name).readlines()
-		for line_index in range(len(output_file_lines)):
-			output_file_lines[line_index] = output_file_lines[line_index].strip()
-		for line_index in range(len(answer_file_lines)):
-			answer_file_lines[line_index] = answer_file_lines[line_index].strip()
-
-		if(output_file_lines == answer_file_lines):
-			print(Fore.GREEN + 'Passed testcase #' + str(idx))
-			print(Style.RESET_ALL)
-		else:
-			print(Fore.RED + 'WA on testcase #' + str(idx), end = '')
-			print(Style.RESET_ALL)
-			print(Fore.CYAN + 'Input:\n' + Style.RESET_ALL + open(input_file_name).read())
-			print(Fore.CYAN + 'Expected answer:\n' + Style.RESET_ALL + answer_file_content)
-			print(Fore.CYAN + '\nYour output:\n' + Style.RESET_ALL + output_file_content)
-
-
-
-def get_contest_id(url):
-	find_list = ['codeforces.com/contest/', 'atcoder.jp/contests/', 'codeforces.com/problemset/problem/', 'codechef.com/']
-	to_find = ''
-
-	for option in find_list:
-		if option in url:
-			to_find = option
-			break
-	
-	idx = url.index(to_find) + len(to_find)
-	retval = ''
-
-	while url[idx] != '/':
-		retval += url[idx]
-		idx += 1
-	
-	return retval.lower()
-		
-
-def make_problem(json_data):
-	oj_name = ''
-
-	if json_data['group'].startswith('Codeforces'):
-		oj_name = 'codeforces'
-	elif json_data['group'].startswith('AtCoder'):
-		oj_name = 'atcoder'
-	elif json_data['group'].startswith('CodeChef'):
-		oj_name = 'codechef'
-	elif json_data['group'].startswith('CSES'):
-		oj_name = 'cses'
-	elif json_data['group'].startswith('USACO'):
-		oj_name = 'usaco'
-
-	problem_name = json_data['name'][0].lower()
-
-	if(json_data['name'][1].isdigit()):
-		problem_name += str(json_data['name'][1])
-
-	if(json_data['name'][0:2] == 'Ex'):
-		problem_name = 'ex'
-
-	if oj_name == 'codechef':
-		problem_name = json_data['url'][json_data['url'].rindex('/') + 1:].lower()
-
-	if oj_name == 'cses':
-		problem_name = json_data['url'][(json_data['url'].rfind('/', 0, json_data['url'].rfind('/'))) + 1:]
-
-	if oj_name == 'usaco':
-		problem_name = json_data['languages']['java']['taskClass']
-
-
-	if oj_name == 'cses':
-		target_path = contest_path.joinpath(oj_name, problem_name)
-	elif oj_name == 'usaco':
-		contest_id = json_data['group'][7:]
-		contest_id = contest_id.replace(' ', '')
-		contest_id = contest_id.replace(',', '')
-		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
-	else:
-		contest_id = get_contest_id(json_data['url'])
-		target_path = contest_path.joinpath(oj_name, contest_id, problem_name)
-
-	file_name = 'code.cpp'
-	file_path = target_path.joinpath(file_name)
-
-	make_new_code_file = True
-
-	if(file_path.is_file()):
-		print('The code file already exists! Re-parsing testcases.')
-		make_new_code_file = False
-	
-	if make_new_code_file:
-		if not os.path.exists(target_path):
-			os.makedirs(target_path)
-		template_file = open(template_file_path, 'r')
-		to_write = template_file.read()
-		template_file.close()
-		to_write = '// time limit: ' + str( json_data['timeLimit']) + 's\n' + to_write
-		to_write = '// memory limit: ' + str(json_data['memoryLimit']) + 'MB\n' + to_write
-		to_write = '// url: ' + json_data['url'] + '\n' + to_write
-		code_file = open(file_path , 'w')
-		code_file.write(to_write)
-		code_file.close()
-
-	io_file_number = 0
-	extension = '.txt'
-
-	for testcase in json_data['tests']:
-		input_file_name = target_path.joinpath('in' + str(io_file_number) + extension)
-		answer_file_name = target_path.joinpath('ans' + str(io_file_number) + extension)
-		io_file_number += 1
-		input_file = open(input_file_name, 'w')
-		input_file.write(testcase['input'])
-		input_file.close()
-		answer_file = open(answer_file_name, 'w')
-		answer_file.write(testcase['output'])
-		answer_file.close()
-	
-	print('Problem successfully made in directory:\n' + 'cd ' + str(target_path))
-	os.system('subl ' + str(file_path))
-
-
-def main():
-	args = docopt(__doc__)
-
-	if args['e'] or args['--echo']:
-		datas = listen_many(num_batches = 1)
-		for data in datas:
-			print(data)
-		return
-	
-	if args['t'] or args['--test']:
-		test()
-		return
-
-	if args['g'] or args['--gen']:
-		gen()
-		return
-
-	os.chdir(base_path)
-	datas = listen_many(num_batches = 1)
-	for json_data in datas:
-		make_problem(json_data)
+    except CptError as e:
+        # Known, user-actionable failures: show the message, no traceback.
+        print(e)
+        sys.exit(1)
+    except OSError as e:
+        # Filesystem/environment failures (permissions, bad path, disk) reaching
+        # this far are user-actionable, not bugs — report them cleanly too.
+        print(f'File system error: {e}')
+        sys.exit(1)
+    except (KeyboardInterrupt, EOFError):
+        print('\nCancelled.')
+        sys.exit(130)
 
 
 if __name__ == '__main__':
-	main()
+    main()
