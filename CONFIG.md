@@ -1,14 +1,14 @@
 # Configuration Reference
 
-cptool stores its settings in `config.json`, located alongside the script
-(`cptool/config.json`). The file is created by `./cpt.py init` and validated
+cptool stores its settings in `config.json`, located alongside `cpt.py`.
+The file is created by `cpt.py init` and validated
 every time it is loaded — an invalid file produces a clear error rather than a
 crash.
 
 You can change settings three ways:
 
-- `./cpt.py config <key> <value>` — set a single value (dotted keys for nesting).
-- `./cpt.py config add-language` — add a language interactively.
+- `cpt.py config <key> <value>` — set a single value (dotted keys for nesting).
+- `cpt.py config add-language` — add a language interactively.
 - Editing `config.json` by hand — it is plain JSON.
 
 ---
@@ -19,7 +19,7 @@ You can change settings three ways:
 |-------|------|----------|-------------|
 | `contests_path` | string | yes | Absolute path to the directory under which contest/problem folders are created. |
 | `language` | string | yes | The **active** language: a key into the `languages` object. Determines which language `t`/`g`/parsing use. |
-| `editor` | string | no | Command used to open new problem files (e.g. `code`, `nvim`). Empty disables auto-open. |
+| `editor` | string | no | Command used to open new problem files (e.g. `code`, `nvim`). Set to `""` or `null` to disable auto-open. |
 | `languages` | object | yes | Map of language name → [language definition](#language-definition). Must contain at least the active language. |
 
 ---
@@ -32,16 +32,16 @@ is the language's name; it is not repeated inside the object.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `extension` | string | recommended | File extension including the dot (e.g. `.cpp`). Used to name the template file and to infer the default comment token. |
-| `source_file` | string | **yes** | Name of the solution file created in each problem directory (e.g. `code.cpp`). |
+| `source_file` | string | **yes** | Filename of the solution file, e.g. `code.cpp`. Must be a bare filename (no path separators). |
 | `template` | string \| null | no | Absolute path to a template file whose contents seed new solution files. `null` or a missing file → an empty body. |
 | `compile` | string \| null | no | Compile command template. `null` marks an interpreted language (no compile step). See [placeholders](#command-placeholders). |
 | `run` | string | **yes** | Command template used to run the solution. See [placeholders](#command-placeholders). |
-| `executable` | string \| null | no | Name of the compiled binary (e.g. `code`). Required for compiled languages; `null` for interpreted ones. |
+| `executable` | string \| null | no | Name of the compiled binary, e.g. `code`. Required when `compile` is set. Must be a bare filename (no path separators). |
 | `comment` | string | no | Line-comment token (e.g. `//`, `#`) used for the metadata header written at the top of new solution files. Defaults to `#` for `.py`, otherwise `//`. |
 
-Only `source_file` and `run` are strictly required, and only for the **active**
-language — an unused, partially-filled entry will not block commands that do not
-use it.
+> **Note:** Only `source_file` and `run` are strictly required, and only for the **active**
+> language. Inactive entries can stay as placeholders while you build them out, but each
+> must still be a JSON object.
 
 ---
 
@@ -53,7 +53,7 @@ before the command is executed:
 | Placeholder | Replaced with |
 |-------------|---------------|
 | `{source}` | the value of `source_file` (e.g. `code.cpp`). |
-| `{executable}` | the compiled binary — its **name** during compilation, and its **full path** when running. Empty for interpreted languages. |
+| `{executable}` | the compiled binary — its **bare name** in the compile command (for the `-o` flag), and its **full path** when running. Empty string for interpreted languages. |
 
 Commands are tokenized safely, so paths containing spaces are handled correctly.
 
@@ -66,9 +66,26 @@ executes, e.g. `compile: "g++ {source} -o {executable}"` then `run: "{executable
 
 ---
 
-## Clearing and typing values
+## Template behavior
 
-- The literal string `null` passed to `./cpt.py config <key> null` sets the field to JSON `null`.
+- When cptool downloads a problem, it writes a metadata header first and then appends the
+  template contents. The header looks like:
+
+  ```
+  // url: https://codeforces.com/contest/1850/problem/A
+  // time limit: 2s
+  // memory limit: 256MB
+  ```
+
+- When you run `cpt.py g`, cptool copies the template into the current directory, or
+  creates an empty file if no template exists. It does not add the metadata header in
+  that mode.
+
+---
+
+## Setting and clearing values
+
+- The literal string `null` passed to `cpt.py config <key> null` sets the field to JSON `null`.
 - `set` coerces the new value to the existing field's type: booleans accept `true`/`false`/`1`/`0`/`yes`/`no`; integers must parse as integers; everything else is stored as a string. A field that is currently `null` is treated as a string going forward.
 
 ---

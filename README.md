@@ -4,16 +4,29 @@ A command-line tool for competitive programming. cptool downloads problems from 
 
 cptool recognizes Codeforces, AtCoder, CodeChef, CSES, and USACO, filing their problems by contest and problem code (for example, `codeforces/1850/a/`). Problems from other sources are downloaded too, under `unknown/<problem-name>/`.
 
+## Quickstart
+
+1. Start the listener: `cpt.py`
+2. Open a problem in your browser and click the Competitive Companion icon.
+3. cptool creates the problem directory, seeds the solution file, and opens it in your editor.
+4. Write your solution, then run `cpt.py t` from the problem directory to test it.
+
 ## Setup
 
 cptool requires Python 3.10+ and the [Competitive Companion](https://github.com/jmerle/competitive-companion) browser extension.
 
 ```bash
-pip install -r requirements.txt
-./cpt.py init
+python3 -m pip install -r requirements.txt
+chmod +x cpt.py
 ```
 
-`init` prompts for an editor, a default language, and a contests directory, then writes `config.json` and seeds starter templates into `templates/`.
+Add `cpt.py` to your `$PATH` so you can call it from any directory. Then run the configuration wizard:
+
+```bash
+cpt.py init
+```
+
+`init` prompts for an editor, a default language, and a contests directory, then writes `config.json` and seeds starter templates into `templates/`. If you rerun it later, it rebuilds `config.json` from scratch — any manual edits or extra languages will be lost.
 
 ## Usage
 
@@ -22,7 +35,7 @@ pip install -r requirements.txt
 | `cpt.py` | Listen for Competitive Companion and create the problem folder(s). |
 | `cpt.py t` | Test the current directory's solution against `in*.txt` / `ans*.txt`. |
 | `cpt.py g` | Generate a solution file from the configured template. |
-| `cpt.py e` | Echo the raw Competitive Companion payload and exit. |
+| `cpt.py e` | Debug: echo the raw Competitive Companion payload and exit without creating files. |
 | `cpt.py init` | Re-run the configuration wizard. |
 | `cpt.py config [<key>] [<value>]` | View or set configuration. |
 | `cpt.py config add-language` | Add a language interactively. |
