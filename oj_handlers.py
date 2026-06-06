@@ -151,10 +151,12 @@ class USACO(Platform):
         name       = task_class if isinstance(task_class, str) and task_class else json_data['name']
         return sanitize_path_segment(name)
 
-    # CC sends the contest as e.g. "USACO 2023 February, Gold". Stripping the
-    # prefix and removing spaces/commas gives "2023FebruaryGold".
+    # CC sends the contest as "USACO <contest>" or "USACO - USACO <contest>".
+    # Strip the prefix(es) and remove spaces/commas to get e.g. "2023FebruaryGold".
     def get_path(self, json_data: dict, contests_path: Path) -> Path:
         contest_id = (json_data['group']
+                      .removeprefix(self.group_prefix)
+                      .lstrip(' -')
                       .removeprefix(self.group_prefix)
                       .strip()
                       .replace(' ', '')
